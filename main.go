@@ -1,18 +1,20 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/zcc_netdown/common"
 	"github.com/zcc_netdown/fileupdown"
 	"github.com/zcc_netdown/model"
 	"github.com/zcc_netdown/pool"
+	"github.com/zcc_netdown/utils"
 )
 
 var ClientConn sync.Map
@@ -26,7 +28,7 @@ func ClientConntest() {
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("cur active conn", ClientConn)
+			//fmt.Println("cur active conn", ClientConn)
 			fmt.Println("cur common source", fileupdown.DataList)
 			//fmt.Println("****", fileupdown.DataList.LoadFile("aaa"))
 		}
@@ -65,36 +67,56 @@ func HandleDownType(conn net.Conn) {
 	// timeout := time.NewTimer(30 * time.Second)
 	// defer timeout.Stop()
 	defer ConnClose(conn)
-	msgBuf := make([]byte, 1024)
-	r := bufio.NewReader(conn)
-	var reqMsg *model.RequestMessage
+	defer pool.Push(flag)
+	defer fmt.Println("hahaha")
+	msgBuf := make([]byte, 2048)
+	var reqMsg model.RequestMessage
 	for {
-		_, err := r.Read(msgBuf)
+		n, err := conn.Read(msgBuf)
 		if err != nil {
-			pool.Push(flag)
 			log.Println("from client conn Read err", err)
 			return
 		}
-		if io.EOF != nil {
+		if io.EOF == nil {
 			return
 		}
-		err = json.Unmarshal(msgBuf, reqMsg)
+		err = json.Unmarshal(msgBuf[:n], &reqMsg)
 		if err != nil {
 			log.Println("conn json.Unmarshal err", err)
 			continue
 		}
-		if _, ok := fileupdown.DataList.LoadFile(reqMsg.FileName); !ok {
-			log.Println("request down file not exist")
-			continue
-		}
-		if reqMsg.UpOrDown == 0 {
-			go fileupdown.DownCommonFile(reqMsg, conn, flag)
-		} else {
 
+		fmt.Println("----", string(msgBuf))
+		fmt.Println("*****", reqMsg)
+		if reqMsg.UpOrDown == 0 {
+			path, ok := fileupdown.DataList.LoadFile(reqMsg.FileName)
+			if !ok {
+				log.Println("request down file not exist")
+				continue
+			}
+			go fileupdown.DownCommonFile(&reqMsg, conn, path)
+		} else {
+			lastname := utils.GetFileLastName(reqMsg.FileName)
+			upAllPath := common.CommonSourceAddr + "/" + lastname + "-file"
+			isExist, err := utils.IsExistPath(upAllPath)
+			if err != nil {
+				log.Println("check path err", err)
+				return
+			}
+			if !isExist {
+				err := os.Mkdir(upAllPath, os.ModePerm)
+				if err != nil {
+					log.Println("create dir err", err)
+					return
+				}
+			}
+			fmt.Println("---------", reqMsg)
+			fileupdown.UpCommonFile(&reqMsg, conn, upAllPath)
 		}
 	}
 
 }
 func ConnClose(conn net.Conn) {
+	ClientConn.Delete(conn.RemoteAddr().String())
 	conn.Close()
 }
