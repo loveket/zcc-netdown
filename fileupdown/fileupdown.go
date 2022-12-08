@@ -1,6 +1,7 @@
 package fileupdown
 
 import (
+	"io"
 	"log"
 	"net"
 	"os"
@@ -9,17 +10,27 @@ import (
 )
 
 func DownCommonFile(reqmsg *model.RequestMessage, conn net.Conn, path string) {
-	downFile, err := os.ReadFile(path + "\\" + reqmsg.FileName)
+	file, err := os.Open(path + "\\" + reqmsg.FileName)
 	if err != nil {
 		log.Println("load local source err", err)
 		return
 	}
-	_, err = conn.Write(downFile)
-	if err != nil {
-		log.Println("down err", err)
-		return
+	buf := make([]byte, 2048)
+	for {
+		n, err := file.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				log.Println("load file data success")
+				conn.Close()
+			}
+			return
+		}
+		_, err = conn.Write(buf[:n])
+		if err != nil {
+			log.Println("down err", err)
+			return
+		}
 	}
-	return
 }
 
 func UpCommonFile(reqmsg *model.RequestMessage, conn net.Conn, path string) {
@@ -31,17 +42,14 @@ func UpCommonFile(reqmsg *model.RequestMessage, conn net.Conn, path string) {
 		log.Println("create file err", err)
 		return
 	}
-	DataList.lock.Lock()
-	DataList.FileMap[reqmsg.FileName] = path
-	DataList.lock.Unlock()
 	msgBuf := make([]byte, 2048)
 	for {
-		n, err := conn.Read(msgBuf)
-		if err != nil {
-			return
-		}
+		n, _ := conn.Read(msgBuf)
 		if n == 0 {
 			log.Println("recv file success")
+			DataList.lock.Lock()
+			DataList.FileMap[reqmsg.FileName] = path
+			DataList.lock.Unlock()
 			return
 		}
 		_, err = file.Write(msgBuf[:n])
@@ -49,6 +57,7 @@ func UpCommonFile(reqmsg *model.RequestMessage, conn net.Conn, path string) {
 			log.Println("write file", err)
 			return
 		}
+
 	}
 
 }

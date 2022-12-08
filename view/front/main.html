@@ -1,0 +1,71 @@
+{{ define "main.html" }}
+<!doctype html>
+<html lang="zh">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>共享资源下载</title>
+    <style type="text/css">
+        body,
+        body {
+            background-color: #5e5e5e;
+        }
+
+        .box1 {
+            width: 60%;
+            border: 1px solid rgb(0, 0, 0);
+            float: left;
+        }
+
+        .box2 {
+            width: 20%;
+            border: 1px solid rgb(0, 0, 0);
+            float: left;
+        }
+    </style>
+</head>
+
+<body>
+
+
+    <div class="wrapper">
+
+        <div class="box1">
+            <h1>共享资源下载</h1>
+            <ul>
+                {{ range $i, $v:=.sourcelist}}
+                <li>
+                    <div>{{$v}}</div>
+                    <div>
+                        <a onclick="GetValue('{{$v}}')" href="">下载</a>
+                    </div>
+                </li>
+                {{end}}
+            </ul>
+        </div>
+        <div class="box2">
+            <form method="post" action="/upcommonsource" enctype="multipart/form-data">
+                <input type="file" name="file">
+                <button onclick="upwait()">上传</button>
+            </form>
+        </div>
+
+    </div>
+
+    <script type="text/javascript" src="../../static/js/jquery-2.1.1.min.js"></script>
+    <script type="text/javascript">
+        function GetValue(filname) {
+            window.open("/downcommonsource?filename=" + filname)
+            return
+        }
+        function upwait() {
+            alert("文件上传请勿关闭浏览器")
+        }
+    </script>
+
+</body>
+
+</html>
+{{end}}
